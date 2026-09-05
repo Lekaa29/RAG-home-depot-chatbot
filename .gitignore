@@ -1,0 +1,16 @@
+node_modules/
+server/store.sqlite
+server/store.sqlite-*
+server/.env
+server/.cache/
+web/dist/
+*.log
+*.tsbuildinfo
+.claude/
+
+# raw Kaggle dataset (100MB+ CSVs) -- see data/kaggle-home-depot, downloaded
+# separately; server/kaggle-items.json is the derived output that's checked in
+data/
+
+# reference floor-plan PDF used while building geometry.js -- not source
+*.pdf

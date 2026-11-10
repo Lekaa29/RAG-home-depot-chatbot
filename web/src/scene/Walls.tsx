@@ -2,11 +2,11 @@ import { useMemo } from "react";
 import * as THREE from "three";
 import { Text } from "@react-three/drei";
 import type { FootprintPoint, Door } from "../api";
-import { theme } from "../theme";
+import { useTheme } from "../ThemeContext";
 
-const WALL_HEIGHT = theme.wallHeight;
+const WALL_HEIGHT = 19; // same in both themes -- see theme.ts wallHeight
 const WALL_THICKNESS = 1;
-const TRIM_HEIGHT = 1.6; // painted signage band, not a thin glow line
+const NEON_RADIUS = 0.22; // thicker core tube, much more visible than before
 const DOOR_HEIGHT = 10;
 const FRAME_COLOR = "#3a3a38"; // dark anodized aluminum storefront framing
 
@@ -73,44 +73,6 @@ function buildSegments(points: FootprintPoint[], doors: Door[]): WallSegment[] {
   return segments;
 }
 
-// Procedural desert-cream brick texture, drawn once to a canvas and reused
-// (cloned per wall so each segment can set its own tiling repeat).
-let sharedBrickTexture: THREE.CanvasTexture | null = null;
-function getBrickTexture(): THREE.CanvasTexture {
-  if (sharedBrickTexture) return sharedBrickTexture;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 128;
-  const ctx = canvas.getContext("2d")!;
-
-  ctx.fillStyle = theme.brickMortar;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  const brickW = 56;
-  const brickH = 24;
-  const gap = 4;
-  const base = new THREE.Color(theme.brickBase);
-
-  for (let y = -brickH; y < canvas.height + brickH; y += brickH + gap) {
-    const row = Math.round(y / (brickH + gap));
-    const offset = Math.abs(row % 2) * (brickW / 2 + gap / 2);
-    for (let x = -brickW; x < canvas.width + brickW; x += brickW + gap) {
-      const seed = Math.abs(Math.sin(row * 928.13 + x * 13.71) * 43758.5453) % 1;
-      const shade = 0.92 + seed * 0.16;
-      const c = base.clone().multiplyScalar(shade);
-      ctx.fillStyle = `#${c.getHexString()}`;
-      ctx.fillRect(x + offset, y, brickW, brickH);
-    }
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  sharedBrickTexture = tex;
-  return tex;
-}
-
 function WallSegmentMesh({
   s,
   plusZIsInterior,
@@ -118,33 +80,79 @@ function WallSegmentMesh({
   s: WallSegment;
   plusZIsInterior: boolean;
 }) {
+  const { theme, dark } = useTheme();
+
   const materials = useMemo(() => {
-    const interior = new THREE.MeshStandardMaterial({ color: theme.wallInterior, roughness: 0.9 });
-    const brickTex = getBrickTexture().clone();
-    brickTex.repeat.set(Math.max(1, s.length / 9), Math.max(1, WALL_HEIGHT / 4.5));
-    brickTex.needsUpdate = true;
-    const exterior = new THREE.MeshStandardMaterial({ map: brickTex, roughness: 0.88 });
+    // In dark mode, a self-emissive glow of each wall's own base color
+    // guarantees it stays visually distinct regardless of shading angle --
+    // a purely lit surface can render much darker than its authored color,
+    // which was crushing every dark surface toward the same near-black.
+    const interior = new THREE.MeshStandardMaterial({
+      color: theme.wallInterior,
+      metalness: 0.05,
+      roughness: 0.55,
+      emissive: dark ? theme.wallInterior : "#000000",
+      emissiveIntensity: dark ? 0.5 : 0,
+    });
+    // plain flat exterior face, no texture -- the neon roofline tube is the
+    // only accent now
+    const exterior = new THREE.MeshStandardMaterial({
+      color: theme.wallExterior,
+      metalness: 0.4,
+      roughness: 0.5,
+      emissive: dark ? theme.wallExterior : "#000000",
+      emissiveIntensity: dark ? 0.5 : 0,
+    });
     // BoxGeometry face group order: +x, -x, +y, -y, +z, -z
     return plusZIsInterior
       ? [interior, interior, interior, interior, interior, exterior]
       : [interior, interior, interior, interior, exterior, interior];
-  }, [s.length, plusZIsInterior]);
+  }, [plusZIsInterior, theme.wallInterior, theme.wallExterior, dark]);
 
   return (
     <group position={[s.midX, 0, s.midZ]} rotation={[0, -s.angle, 0]}>
       <mesh position={[0, WALL_HEIGHT / 2, 0]} castShadow receiveShadow material={materials}>
         <boxGeometry args={[s.length, WALL_HEIGHT, WALL_THICKNESS]} />
       </mesh>
-      {/* painted safety-yellow signage band near the roofline, exterior side */}
-      <mesh position={[0, WALL_HEIGHT - TRIM_HEIGHT / 2 - 0.5, 0.02]}>
-        <boxGeometry args={[s.length, TRIM_HEIGHT, WALL_THICKNESS * 0.1]} />
-        <meshStandardMaterial color={theme.wallTrim} metalness={0} roughness={0.7} />
-      </mesh>
+      {/* yellow neon tube sitting on top of the wall, tracing the building's
+          own footprint segment by segment -- unlit (toneMapped=false) so it
+          reads as a true glowing light rather than a painted stripe, plus two
+          wider additive-blended halo layers stacked around it for a much
+          stronger, actually-glowing look without needing a bloom pass. */}
+      <group position={[0, WALL_HEIGHT + NEON_RADIUS, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <mesh>
+          <cylinderGeometry args={[NEON_RADIUS, NEON_RADIUS, s.length, 12]} />
+          <meshBasicMaterial color={theme.wallTrim} toneMapped={false} />
+        </mesh>
+        <mesh>
+          <cylinderGeometry args={[NEON_RADIUS * 2.6, NEON_RADIUS * 2.6, s.length, 12]} />
+          <meshBasicMaterial
+            color={theme.wallTrim}
+            toneMapped={false}
+            transparent
+            opacity={0.45}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
+        <mesh>
+          <cylinderGeometry args={[NEON_RADIUS * 5, NEON_RADIUS * 5, s.length, 12]} />
+          <meshBasicMaterial
+            color={theme.wallTrim}
+            toneMapped={false}
+            transparent
+            opacity={0.2}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
+      </group>
     </group>
   );
 }
 
 function EntranceDoor({ x, z, width, rotationY }: Door) {
+  const { theme } = useTheme();
   const panelGap = 0.3;
   const framePost = 0.4;
   const panelWidth = (width - panelGap) / 2 - framePost;

@@ -1,12 +1,13 @@
 import { Text } from "@react-three/drei";
 import type { CheckoutCounter } from "../api";
-import { theme } from "../theme";
+import { useTheme } from "../ThemeContext";
 
 const COUNTER_HEIGHT = 3.5;
 const COUNTER_DEPTH = 2.2;
 const METAL_COLOR = "#5a5a56";
 
 function Counter({ x, z, width }: CheckoutCounter) {
+  const { theme } = useTheme();
   return (
     <group position={[x, 0, z]}>
       {/* counter body -- bone-white laminate */}
@@ -37,6 +38,7 @@ function Counter({ x, z, width }: CheckoutCounter) {
 const SIGN_HEIGHT = COUNTER_HEIGHT + 3.5;
 
 export function CheckoutCounters({ counters }: { counters: CheckoutCounter[] }) {
+  const { theme } = useTheme();
   if (counters.length === 0) return null;
   const xs = counters.map((c) => c.x);
   const signX = (Math.min(...xs) + Math.max(...xs)) / 2;

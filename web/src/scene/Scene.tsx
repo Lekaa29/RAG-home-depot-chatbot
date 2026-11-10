@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { MOUSE, TOUCH, Shape } from "three";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, OrthographicCamera, Grid } from "@react-three/drei";
+import { OrbitControls, OrthographicCamera } from "@react-three/drei";
 import type { Shelf, FootprintPoint, Door, CheckoutCounter, PartitionWall, Appliance, FloorLabel } from "../api";
 import type { Trip } from "../pathfinding";
 import { Shelves } from "./Shelves";
@@ -12,7 +12,7 @@ import { PartitionWalls } from "./PartitionWalls";
 import { Appliances } from "./Appliances";
 import { FloorLabels } from "./FloorLabels";
 import { ZoomRig } from "./ZoomRig";
-import { theme } from "../theme";
+import { useTheme } from "../ThemeContext";
 
 interface Bounds {
   minX: number;
@@ -54,13 +54,15 @@ export function Scene({
   bounds: Bounds;
   trip: Trip | null;
 }) {
+  const { theme, dark } = useTheme();
+
   // Memoized so these array/number identities stay stable across re-renders
   // (dropdown changes, route computation, etc). OrbitControls' `target` and
   // the camera's `position` re-sync to whatever is passed in on every render
   // where the reference changes -- with fresh array literals every render,
   // that was silently snapping any user pan/rotate back to center as soon as
   // the app re-rendered for an unrelated reason.
-  const { center, camPos, viewSize, dist, width, depth } = useMemo(() => {
+  const { center, camPos, viewSize, dist } = useMemo(() => {
     const width = bounds.maxX - bounds.minX;
     const depth = bounds.maxZ - bounds.minZ;
     const center: [number, number, number] = [
@@ -75,7 +77,7 @@ export function Scene({
       center[2] + dist,
     ];
     const viewSize = Math.max(width, depth) * 0.75;
-    return { center, camPos, viewSize, dist, width, depth };
+    return { center, camPos, viewSize, dist };
   }, [bounds.minX, bounds.maxX, bounds.minZ, bounds.maxZ]);
 
   // Interior floor is cut to the exact building outline so "inside" reads as
@@ -93,8 +95,12 @@ export function Scene({
     return shape;
   }, [footprint]);
 
+  // flat: disables the default filmic tone mapping, which crushes dark
+  // tones together -- fine in light mode where colors sit in the bright
+  // range, but it was flattening the dark theme's whole gray ramp toward
+  // black. Flat rendering reproduces authored colors literally instead.
   return (
-    <Canvas shadows dpr={[1, 2]}>
+    <Canvas shadows dpr={[1, 2]} flat>
       <OrthographicCamera
         makeDefault
         position={camPos}
@@ -122,31 +128,35 @@ export function Scene({
       <color attach="background" args={[theme.bgVoid]} />
       <fog attach="fog" args={[theme.bgVoid, dist * 2.2, dist * 4]} />
 
-      <ambientLight intensity={0.75} color="#fffdf5" />
-      <directionalLight position={[100, 150, 80]} intensity={1.05} color="#fffaf0" castShadow />
-      <directionalLight position={[-80, 60, -60]} intensity={0.4} color="#eef1f5" />
+      {dark ? (
+        <>
+          <ambientLight intensity={0.55} color="#7c8790" />
+          <directionalLight position={[100, 150, 80]} intensity={0.55} color="#8a97a3" castShadow />
+          <directionalLight position={[-80, 60, -60]} intensity={0.3} color="#5c6870" />
+        </>
+      ) : (
+        <>
+          <ambientLight intensity={0.7} color="#f4f8ff" />
+          <directionalLight position={[100, 150, 80]} intensity={1.05} color="#f2f6ff" castShadow />
+          <directionalLight position={[-80, 60, -60]} intensity={0.45} color="#e4ecf5" />
+        </>
+      )}
 
-      {/* faint concrete control-joint lines, not a design centerpiece */}
-      <Grid
-        position={[center[0], 0, center[2]]}
-        args={[width + 40, depth + 40]}
-        cellSize={14}
-        cellColor={theme.gridLine}
-        sectionColor={theme.gridSection}
-        fadeDistance={dist * 2}
-        cellThickness={0.5}
-        sectionThickness={0.8}
-        infiniteGrid={false}
-      />
-      {/* exterior apron -- unchanged gray concrete */}
-      <mesh position={[center[0], -0.05, center[2]]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[width + 40, depth + 40]} />
-        <meshStandardMaterial color={theme.floorOutside} roughness={0.95} metalness={0} />
-      </mesh>
-      {/* interior floor -- much lighter, cut to the exact building outline */}
+      {/* floor is only ever the building's own footprint -- no exterior
+          apron, no grid overlay, just the whitest possible flat white. In
+          dark mode, a self-emissive floor of its own base color guarantees
+          it reads as a distinct step regardless of shading angle -- a
+          shaded surface can render much darker than its authored color, and
+          lit-vs-unlit brightness was crushing every dark surface together. */}
       <mesh position={[0, -0.03, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <shapeGeometry args={[insideFloorShape]} />
-        <meshStandardMaterial color={theme.floorInside} roughness={0.9} metalness={0} />
+        <meshStandardMaterial
+          color={theme.floorInside}
+          roughness={0.4}
+          metalness={0}
+          emissive={dark ? theme.floorInside : "#000000"}
+          emissiveIntensity={dark ? 0.6 : 0}
+        />
       </mesh>
 
       <Walls points={footprint} doors={doors} />

@@ -1,12 +1,13 @@
 import { Billboard, Html, Line } from "@react-three/drei";
 import type { Trip } from "../pathfinding";
-import { theme } from "../theme";
+import { useTheme } from "../ThemeContext";
 
 const ROUTE_LINE_HEIGHT = 30; // hovers at the tallest racking height -- must match TWO_STORY_HEIGHT in server/geometry.js
 const PIN_Y = ROUTE_LINE_HEIGHT + 6; // tied to the racking, not wall height, so pins stay above the route line regardless of how tall the walls are
 const POST_COLOR = "#4a4a46"; // plain painted-steel sign post
 
 function StartBeacon({ x, z }: { x: number; z: number }) {
+  const { theme } = useTheme();
   return (
     <group>
       <Line points={[[x, ROUTE_LINE_HEIGHT, z], [x, PIN_Y - 3, z]]} color={POST_COLOR} lineWidth={2} />
@@ -25,6 +26,7 @@ function StartBeacon({ x, z }: { x: number; z: number }) {
 }
 
 function ItemPin({ x, z, icon, order }: { x: number; z: number; icon: string; order: number }) {
+  const { theme } = useTheme();
   return (
     <group>
       {/* plain sign post connecting the floor-level path up to the pin */}

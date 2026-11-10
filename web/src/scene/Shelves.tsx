@@ -1,13 +1,14 @@
 import { Text } from "@react-three/drei";
 import type { Shelf } from "../api";
-import { theme } from "../theme";
+import { useTheme } from "../ThemeContext";
 
 const DECK_LEVELS = 4; // number of horizontal shelf levels
 const DECK_THICKNESS = 0.25;
-const FRAME_COLOR = theme.shelfFrame;
-const DECK_COLOR = theme.shelfDeck;
 
 function ShelfRack({ shelf }: { shelf: Shelf }) {
+  const { theme, dark } = useTheme();
+  const FRAME_COLOR = theme.shelfFrame;
+  const DECK_COLOR = theme.shelfDeck;
   const { x, z, width, depth, height, rotation_deg, columns } = shelf;
   const frameThickness = Math.min(0.6, width);
   const frameSpacing = 15;
@@ -36,11 +37,18 @@ function ShelfRack({ shelf }: { shelf: Shelf }) {
 
   return (
     <group position={[x, 0, z]} rotation={[0, (rotation_deg * Math.PI) / 180, 0]}>
-      {/* uprights -- painted safety-yellow steel racking */}
+      {/* uprights -- safety-yellow steel racking, lit from within for a
+          sleeker, more futuristic read than flat painted steel */}
       {frames.map((fz, i) => (
         <mesh key={`frame-${i}`} position={[0, height / 2, fz]} castShadow>
           <boxGeometry args={[width, height, frameThickness]} />
-          <meshStandardMaterial color={FRAME_COLOR} metalness={0.35} roughness={0.55} />
+          <meshStandardMaterial
+            color={FRAME_COLOR}
+            emissive={FRAME_COLOR}
+            emissiveIntensity={0.25}
+            metalness={0.55}
+            roughness={0.3}
+          />
         </mesh>
       ))}
 
@@ -53,8 +61,10 @@ function ShelfRack({ shelf }: { shelf: Shelf }) {
             <boxGeometry args={[width * 1.15, DECK_THICKNESS, depth]} />
             <meshStandardMaterial
               color={DECK_COLOR}
-              metalness={0}
-              roughness={0.85}
+              metalness={0.2}
+              roughness={0.4}
+              emissive={dark ? DECK_COLOR : "#000000"}
+              emissiveIntensity={dark ? 0.5 : 0}
               transparent={isTopDeck}
               opacity={isTopDeck ? 0 : 1}
               depthWrite={!isTopDeck}
@@ -75,6 +85,7 @@ function ShelfRack({ shelf }: { shelf: Shelf }) {
 }
 
 export function Shelves({ shelves }: { shelves: Shelf[] }) {
+  const { theme } = useTheme();
   return (
     <group>
       {shelves.map((s) => (

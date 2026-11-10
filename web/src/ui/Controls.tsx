@@ -1,4 +1,5 @@
 import type { Item, Location } from "../api";
+import { useTheme } from "../ThemeContext";
 
 export function Controls({
   items,
@@ -19,9 +20,22 @@ export function Controls({
   onFindRoute: () => void;
   distanceFt: number | null;
 }) {
+  const { dark, toggleDark } = useTheme();
+
   return (
     <div className="controls">
-      <h1>Store Navigator</h1>
+      <div className="controls-header">
+        <h1>Store Navigator</h1>
+        <button
+          type="button"
+          className="theme-toggle"
+          onClick={toggleDark}
+          aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+          title={dark ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {dark ? "☀️" : "🌙"}
+        </button>
+      </div>
 
       <label>
         I'm looking for
